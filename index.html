@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Touch Screen Test Suite</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            touch-action: none;
+            user-select: none;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .header {
+            background-color: #333;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            position: relative;
+        }
+        
+        .test-area {
+            flex: 1;
+            position: relative;
+            background-color: #fff;
+            overflow: hidden;
+        }
+        
+        .touch-point {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: rgba(0, 123, 255, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+            transition: opacity 0.5s ease-out;
+        }
+        
+        .swipe-trail {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: rgba(255, 123, 0, 0.5);
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+        }
+        
+        .pinch-indicator {
+            position: absolute;
+            border: 2px dashed rgba(0, 255, 0, 0.7);
+            border-radius: 50%;
+            pointer-events: none;
+            transform: translate(-50%, -50%);
+        }
+        
+        .controls {
+            background-color: #444;
+            color: white;
+            padding: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-around;
+        }
+        
+        .test-button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .test-button.active {
+            background-color: #28a745;
+        }
+        
+        .status-panel {
+            background-color: rgba(0, 0, 0, 0.8);
+            color: #00ff00;
+            padding: 10px;
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            min-width: 200px;
+            max-width: 300px;
+        }
+        
+        .info-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: white;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            text-align: center;
+            z-index: 100;
+            transition: opacity 0.3s ease;
+        }
+        
+        .close-overlay {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin-top: 20px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .test-result {
+            margin-top: 15px;
+            padding: 10px;
+            background-color: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+        }
+        
+        .result-success {
+            color: #28a745;
+        }
+        
+        .result-failure {
+            color: #dc3545;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Touch Screen Test Suite</h1>
+        </div>
+        
+        <div id="testArea" class="test-area">
+            <div id="statusPanel" class="status-panel">
+                <div>Current Test: <span id="currentTest">None</span></div>
+                <div>Touch Points: <span id="touchCount">0</span></div>
+                <div>Last Gesture: <span id="lastGesture">None</span></div>
+                <div id="testResultContainer" class="test-result hidden">
+                    <div>Test Result: <span id="testResult"></span></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button id="singleTapTest" class="test-button">Single Tap Test</button>
+            <button id="multiTouchTest" class="test-button">Multi-Touch Test</button>
+            <button id="swipeTest" class="test-button">Swipe Test</button>
+            <button id="pinchTest" class="test-button">Pinch Test</button>
+            <button id="threeFingerTest" class="test-button">Three Finger Swipe</button>
+            <button id="fiveFingerTest" class="test-button">Five Finger Test</button>
+            <button id="helpButton" class="test-button">Help</button>
+        </div>
+    </div>
+    
+    <div id="infoOverlay" class="info-overlay">
+        <h2>Touch Screen Test Instructions</h2>
+        <p id="testInstructions">Select a test to begin</p>
+        <button id="closeOverlay" class="close-overlay">Start Test</button>
+    </div>
+    
+    <script>
+        // Global variables
+        let currentTestMode = 'none';
+        let touchPoints = {};
+        let swipeTrails = [];
+        let touchStartPositions = {};
+        let pinchStartDistance = 0;
+        let pinchIndicator = null;
+        
+        // DOM elements
+        const testArea = document.getElementById('testArea');
+        const currentTestDisplay = document.getElementById('currentTest');
+        const touchCountDisplay = document.getElementById('touchCount');
+        const lastGestureDisplay = document.getElementById('lastGesture');
+        const testResultContainer = document.getElementById('testResultContainer');
+        const testResultDisplay = document.getElementById('testResult');
+        const infoOverlay = document.getElementById('infoOverlay');
+        const testInstructions = document.getElementById('testInstructions');
+        const closeOverlayButton = document.getElementById('closeOverlay');
+        
+        // Test buttons
+        const singleTapTestButton = document.getElementById('singleTapTest');
+        const multiTouchTestButton = document.getElementById('multiTouchTest');
+        const swipeTestButton = document.getElementById('swipeTest');
+        const pinchTestButton = document.getElementById('pinchTest');
+        const threeFingerTestButton = document.getElementById('threeFingerTest');
+        const fiveFingerTestButton = document.getElementById('fiveFingerTest');
+        const helpButton = document.getElementById('helpButton');
+        
+        // Initialize the app
+        function init() {
+            // Add event listeners for test buttons
+            singleTapTestButton.addEventListener('click', () => startTest('singleTap'));
+            multiTouchTestButton.addEventListener('click', () => startTest('multiTouch'));
+            swipeTestButton.addEventListener('click', () => startTest('swipe'));
+            pinchTestButton.addEventListener('click', () => startTest('pinch'));
+            threeFingerTestButton.addEventListener('click', () => startTest('threeFingerSwipe'));
+            fiveFingerTestButton.addEventListener('click', () => startTest('fiveFingerTouch'));
+            helpButton.addEventListener('click', showHelp);
+            
+            // Add event listener for overlay close button
+            closeOverlayButton.addEventListener('click', () => {
+                infoOverlay.classList.add('hidden');
+            });
+            
+            // Add touch event listeners to test area
+            testArea.addEventListener('touchstart', handleTouchStart, false);
+            testArea.addEventListener('touchmove', handleTouchMove, false);
+            testArea.addEventListener('touchend', handleTouchEnd, false);
+            testArea.addEventListener('touchcancel', handleTouchEnd, false);
+            
+            // Prevent default behavior for touch events
+            document.addEventListener('touchmove', function(e) {
+                e.preventDefault();
+            }, { passive: false });
+        }
+        
+        // Start a specific test
+        function startTest(testMode) {
+            // Reset previous test
+            resetTest();
+            
+            // Set current test mode
+            currentTestMode = testMode;
+            currentTestDisplay.textContent = getTestDisplayName(testMode);
+            
+            // Highlight the active test button
+            resetButtonHighlights();
+            document.getElementById(testMode + 'Test').classList.add('active');
+            
+            // Show test instructions
+            showTestInstructions(testMode);
+        }
+        
+        // Get display name for test mode
+        function getTestDisplayName(testMode) {
+            switch(testMode) {
+                case 'singleTap': return 'Single Tap';
+                case 'multiTouch': return 'Multi-Touch';
+                case 'swipe': return 'Swipe';
+                case 'pinch': return 'Pinch Gesture';
+                case 'threeFingerSwipe': return 'Three Finger Swipe';
+                case 'fiveFingerTouch': return 'Five Finger Touch';
+                default: return 'None';
+            }
+        }
+        
+        // Show instructions for the current test
+        function showTestInstructions(testMode) {
+            let instructions = '';
+            
+            switch(testMode) {
+                case 'singleTap':
+                    instructions = 'Tap anywhere on the screen. The test will detect single taps and show response time.';
+                    break;
+                case 'multiTouch':
+                    instructions = 'Place multiple fingers on the screen simultaneously. The test will detect how many touch points your screen can handle.';
+                    break;
+                case 'swipe':
+                    instructions = 'Swipe your finger across the screen in any direction. The test will track the path and measure swipe speed and accuracy.';
+                    break;
+                case 'pinch':
+                    instructions = 'Place two fingers on the screen and pinch in or out. The test will measure pinch gesture recognition.';
+                    break;
+                case 'threeFingerSwipe':
+                    instructions = 'Place three fingers on the screen and swipe in any direction. The test will verify if your screen can detect three-finger gestures.';
+                    break;
+                case 'fiveFingerTouch':
+                    instructions = 'Place all five fingers or your entire hand on the screen. The test will determine if all touch points are detected.';
+                    break;
+                default:
+                    instructions = 'Select a test to begin';
+            }
+            
+            testInstructions.textContent = instructions;
+            infoOverlay.classList.remove('hidden');
+        }
+        
+        // Show help information
+        function showHelp() {
+            testInstructions.innerHTML = `
+                <h3>Test Types:</h3>
+                <p><strong>Single Tap</strong>: Tests basic touch responsiveness.</p>
+                <p><strong>Multi-Touch</strong>: Tests multiple simultaneous touch points.</p>
+                <p><strong>Swipe</strong>: Tests swipe gesture recognition.</p>
+                <p><strong>Pinch</strong>: Tests pinch-to-zoom gesture.</p>
+                <p><strong>Three Finger Swipe</strong>: Tests three-finger gestures.</p>
+                <p><strong>Five Finger Touch</strong>: Tests detection of all five fingers or whole hand.</p>
+            `;
+            infoOverlay.classList.remove('hidden');
+        }
+        
+        // Handle touch start events
+        function handleTouchStart(event) {
+            // Get the current touch points
+            const touches = event.touches;
+            touchCountDisplay.textContent = touches.length;
+            
+            // Store initial positions for each touch point
+            for (let i = 0; i < touches.length; i++) {
+                const touch = touches[i];
+                const id = touch.identifier;
+                const x = touch.clientX;
+                const y = touch.clientY;
+                
+                touchStartPositions[id] = { x, y };
+                
+                // Create visual touch point indicators
+                createTouchPoint(id, x, y, i + 1);
+            }
+            
+            // Handle test-specific logic
+            switch(currentTestMode) {
+                case 'pinch':
+                    if (touches.length === 2) {
+                        // Calculate initial distance for pinch gesture
+                        pinchStartDistance = calculateDistance(
+                            touches[0].clientX, touches[0].clientY,
+                            touches[1].clientX, touches[1].clientY
+                        );
+                        
+                        // Create pinch indicator
+                        const centerX = (touches[0].clientX + touches[1].clientX) / 2;
+                        const centerY = (touches[0].clientY + touches[1].clientY) / 2;
+                        createPinchIndicator(centerX, centerY, pinchStartDistance);
+                    }
+                    break;
+                    
+                case 'threeFingerSwipe':
+                    if (touches.length === 3) {
+                        lastGestureDisplay.textContent = "Three fingers detected";
+                    }
+                    break;
+                    
+                case 'fiveFingerTouch':
+                    if (touches.length >= 5) {
+                        showTestResult("Success! All five fingers detected.", true);
+                    }
+                    break;
+            }
+        }
+        
+        // Handle touch move events
+        function handleTouchMove(event) {
+            const touches = event.touches;
+            
+            // Update touch points
+            for (let i = 0; i < touches.length; i++) {
+                const touch = touches[i];
+                const id = touch.identifier;
+                const x = touch.clientX;
+                const y = touch.clientY;
+                
+                // Update visual touch point positions
+                updateTouchPoint(id, x, y);
+                
+                // Create trail for swipe
+                if (currentTestMode === 'swipe' || currentTestMode === 'threeFingerSwipe') {
+                    createSwipeTrail(x, y);
+                }
+                
+                // Check for swipe gesture
+                if (touchStartPositions[id]) {
+                    const startX = touchStartPositions[id].x;
+                    const startY = touchStartPositions[id].y;
+                    const deltaX = x - startX;
+                    const deltaY = y - startY;
+                    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+                    
+                    // Determine swipe direction if distance is significant
+                    if (distance > 50) {
+                        let direction = '';
+                        
+                        if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                            direction = deltaX > 0 ? 'right' : 'left';
+                        } else {
+                            direction = deltaY > 0 ? 'down' : 'up';
+                        }
+                        
+                        if (currentTestMode === 'swipe') {
+                            lastGestureDisplay.textContent = `Swipe ${direction} (${Math.round(distance)}px)`;
+                        } else if (currentTestMode === 'threeFingerSwipe' && touches.length === 3) {
+                            lastGestureDisplay.textContent = `Three finger swipe ${direction} (${Math.round(distance)}px)`;
+                            showTestResult("Success! Three finger swipe detected.", true);
+                        }
+                    }
+                }
+            }
+            
+            // Handle pinch gesture
+            if (currentTestMode === 'pinch' && touches.length === 2) {
+                const currentDistance = calculateDistance(
+                    touches[0].clientX, touches[0].clientY,
+                    touches[1].clientX, touches[1].clientY
+                );
+                
+                const centerX = (touches[0].clientX + touches[1].clientX) / 2;
+                const centerY = (touches[0].clientY + touches[1].clientY) / 2;
+                
+                // Update pinch indicator
+                updatePinchIndicator(centerX, centerY, currentDistance);
+                
+                // Determine pinch direction
+                const pinchRatio = currentDistance / pinchStartDistance;
+                let pinchDirection = '';
+                
+                if (pinchRatio > 1.1) {
+                    pinchDirection = 'out (zoom in)';
+                } else if (pinchRatio < 0.9) {
+                    pinchDirection = 'in (zoom out)';
+                }
+                
+                if (pinchDirection) {
+                    lastGestureDisplay.textContent = `Pinch ${pinchDirection} (${Math.round(pinchRatio * 100)}%)`;
+                    showTestResult("Success! Pinch gesture detected.", true);
+                }
+            }
+        }
+        
+        // Handle touch end events
+        function handleTouchEnd(event) {
+            // Get remaining active touches
+            const touches = event.touches;
+            touchCountDisplay.textContent = touches.length;
+            
+            // Remove touch points that are no longer active
+            const activeIds = Array.from(touches).map(touch => touch.identifier);
+            const previousIds = Object.keys(touchPoints);
+            
+            for (const id of previousIds) {
+                if (!activeIds.includes(parseInt(id))) {
+                    removeTouchPoint(id);
+                    delete touchStartPositions[id];
+                }
+            }
+            
+            // Handle test-specific logic
+            switch(currentTestMode) {
+                case 'singleTap':
+                    if (event.changedTouches.length === 1 && Object.keys(touchPoints).length === 0) {
+                        lastGestureDisplay.textContent = "Single tap detected";
+                        showTestResult("Success! Single tap registered correctly.", true);
+                    }
+                    break;
+                    
+                case 'multiTouch':
+                    const maxTouches = Math.max(Object.keys(touchPoints).length + event.changedTouches.length, parseInt(touchCountDisplay.textContent));
+                    if (maxTouches > 1) {
+                        showTestResult(`Detected ${maxTouches} simultaneous touch points`, true);
+                    }
+                    break;
+            }
+            
+            // Clear swipe trails after a delay
+            if (currentTestMode === 'swipe' || currentTestMode === 'threeFingerSwipe') {
+                setTimeout(clearSwipeTrails, 1000);
+            }
+            
+            // Remove pinch indicator
+            if (currentTestMode === 'pinch' && touches.length < 2) {
+                removePinchIndicator();
+            }
+        }
+        
+        // Create a visual touch point
+        function createTouchPoint(id, x, y, index) {
+            const touchPoint = document.createElement('div');
+            touchPoint.className = 'touch-point';
+            touchPoint.textContent = index;
+            touchPoint.style.left = x + 'px';
+            touchPoint.style.top = y + 'px';
+            
+            testArea.appendChild(touchPoint);
+            touchPoints[id] = touchPoint;
+        }
+        
+        // Update touch point position
+        function updateTouchPoint(id, x, y) {
+            const touchPoint = touchPoints[id];
+            if (touchPoint) {
+                touchPoint.style.left = x + 'px';
+                touchPoint.style.top = y + 'px';
+            }
+        }
+        
+        // Remove a touch point
+        function removeTouchPoint(id) {
+            const touchPoint = touchPoints[id];
+            if (touchPoint) {
+                touchPoint.style.opacity = '0';
+                setTimeout(() => {
+                    if (touchPoint.parentNode) {
+                        touchPoint.parentNode.removeChild(touchPoint);
+                    }
+                }, 500);
+                delete touchPoints[id];
+            }
+        }
+        
+        // Create a swipe trail point
+        function createSwipeTrail(x, y) {
+            const trail = document.createElement('div');
+            trail.className = 'swipe-trail';
+            trail.style.left = x + 'px';
+            trail.style.top = y + 'px';
+            
+            testArea.appendChild(trail);
+            swipeTrails.push(trail);
+            
+            // Limit the number of trail points
+            if (swipeTrails.length > 50) {
+                const oldTrail = swipeTrails.shift();
+                if (oldTrail.parentNode) {
+                    oldTrail.parentNode.removeChild(oldTrail);
+                }
+            }
+        }
+        
+        // Clear all swipe trails
+        function clearSwipeTrails() {
+            for (const trail of swipeTrails) {
+                if (trail.parentNode) {
+                    trail.parentNode.removeChild(trail);
+                }
+            }
+            swipeTrails = [];
+        }
+        
+        // Create pinch indicator
+        function createPinchIndicator(x, y, diameter) {
+            pinchIndicator = document.createElement('div');
+            pinchIndicator.className = 'pinch-indicator';
+            pinchIndicator.style.left = x + 'px';
+            pinchIndicator.style.top = y + 'px';
+            pinchIndicator.style.width = diameter + 'px';
+            pinchIndicator.style.height = diameter + 'px';
+            
+            testArea.appendChild(pinchIndicator);
+        }
+        
+        // Update pinch indicator
+        function updatePinchIndicator(x, y, diameter) {
+            if (pinchIndicator) {
+                pinchIndicator.style.left = x + 'px';
+                pinchIndicator.style.top = y + 'px';
+                pinchIndicator.style.width = diameter + 'px';
+                pinchIndicator.style.height = diameter + 'px';
+            }
+        }
+        
+        // Remove pinch indicator
+        function removePinchIndicator() {
+            if (pinchIndicator && pinchIndicator.parentNode) {
+                pinchIndicator.parentNode.removeChild(pinchIndicator);
+                pinchIndicator = null;
+            }
+        }
+        
+        // Calculate distance between two points
+        function calculateDistance(x1, y1, x2, y2) {
+            return Math.sqrt(
+                Math.pow(x2 - x1, 2) + 
+                Math.pow(y2 - y1, 2)
+            );
+        }
+        
+        // Show test result
+        function showTestResult(message, success) {
+            testResultDisplay.textContent = message;
+            testResultDisplay.className = success ? 'result-success' : 'result-failure';
+            testResultContainer.classList.remove('hidden');
+        }
+        
+        // Reset test
+        function resetTest() {
+            // Clear all touch points
+            for (const id in touchPoints) {
+                removeTouchPoint(id);
+            }
+            
+            // Clear swipe trails
+            clearSwipeTrails();
+            
+            // Remove pinch indicator
+            removePinchIndicator();
+            
+            // Reset displays
+            touchCountDisplay.textContent = '0';
+            lastGestureDisplay.textContent = 'None';
+            testResultContainer.classList.add('hidden');
+            
+            // Reset data
+            touchPoints = {};
+            touchStartPositions = {};
+            pinchStartDistance = 0;
+        }
+        
+        // Reset button highlights
+        function resetButtonHighlights() {
+            singleTapTestButton.classList.remove('active');
+            multiTouchTestButton.classList.remove('active');
+            swipeTestButton.classList.remove('active');
+            pinchTestButton.classList.remove('active');
+            threeFingerTestButton.classList.remove('active');
+            fiveFingerTestButton.classList.remove('active');
+            helpButton.classList.remove('active');
+        }
+        
+        // Initialize the app when the document is loaded
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
