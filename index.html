@@ -8,7 +8,7 @@
         * {
             box-sizing: border-box;
             margin: 0;
-            padding-bottom: 10vw;
+            padding-bottom: 5vw;
             touch-action: none;
             user-select: none;
         }
@@ -184,6 +184,7 @@
             <button id="pinchTest" class="test-button">Pinch Test</button>
             <button id="threeFingerTest" class="test-button">Three Finger Swipe</button>
             <button id="fiveFingerTest" class="test-button">Five Finger Test</button>
+            <button id="clearButton" class="test-button" style="background-color: #dc3545;">Clear Screen</button>
             <button id="helpButton" class="test-button">Help</button>
         </div>
     </div>
@@ -232,6 +233,7 @@
             pinchTestButton.addEventListener('click', () => startTest('pinch'));
             threeFingerTestButton.addEventListener('click', () => startTest('threeFingerSwipe'));
             fiveFingerTestButton.addEventListener('click', () => startTest('fiveFingerTouch'));
+            document.getElementById('clearButton').addEventListener('click', clearScreen);
             helpButton.addEventListener('click', showHelp);
             
             // Add event listener for overlay close button
@@ -266,6 +268,11 @@
             
             // Show test instructions
             showTestInstructions(testMode);
+            
+            // Add note about palm detection for five finger test
+            if (testMode === 'fiveFingerTouch') {
+                lastGestureDisplay.textContent = "Try placing your entire palm down";
+            }
         }
         
         // Get display name for test mode
@@ -339,10 +346,13 @@
                 const x = touch.clientX;
                 const y = touch.clientY;
                 
-                touchStartPositions[id] = { x, y };
+                // Check if this is a palm detection
+                const isPalm = touch.radiusX > 30 || touch.radiusY > 30;
                 
-                // Create visual touch point indicators
-                createTouchPoint(id, x, y, i + 1);
+                touchStartPositions[id] = { x, y, isPalm };
+                
+                // Create visual touch point indicators with different styling for palm
+                createTouchPoint(id, x, y, i + 1, isPalm);
             }
             
             // Handle test-specific logic
@@ -499,12 +509,20 @@
         }
         
         // Create a visual touch point
-        function createTouchPoint(id, x, y, index) {
+        function createTouchPoint(id, x, y, index, isPalm = false) {
             const touchPoint = document.createElement('div');
             touchPoint.className = 'touch-point';
             touchPoint.textContent = index;
             touchPoint.style.left = x + 'px';
             touchPoint.style.top = y + 'px';
+            
+            // Add special styling for palm detection
+            if (isPalm) {
+                touchPoint.style.backgroundColor = 'rgba(255, 0, 0, 0.7)';
+                touchPoint.style.width = '60px';
+                touchPoint.style.height = '60px';
+                touchPoint.textContent = 'P' + index;
+            }
             
             testArea.appendChild(touchPoint);
             touchPoints[id] = touchPoint;
@@ -629,6 +647,14 @@
             touchPoints = {};
             touchStartPositions = {};
             pinchStartDistance = 0;
+        }
+        
+        // Clear the screen of all touch indicators
+        function clearScreen() {
+            resetTest();
+            currentTestMode = 'none';
+            currentTestDisplay.textContent = 'None';
+            resetButtonHighlights();
         }
         
         // Reset button highlights
